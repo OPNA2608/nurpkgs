@@ -14,8 +14,18 @@
   modules = import ./modules; # NixOS modules
   overlays = import ./overlays; # nixpkgs overlays
 
-  example-package = pkgs.callPackage ./pkgs/example-package { };
-  # some-qt5-package = pkgs.libsForQt5.callPackage ./pkgs/some-qt5-package { };
-  # ...
+  # Bumped Halide, dependency. PR #100202
+  halide-10 = pkgs.callPackage ./pkgs/halide-10 {
+    llvmPackages = llvmPackages_9;
+  };
+
+  hdr-plus = pkgs.callPackage ./pkgs/hdr-plus {
+    halide = halide-10;
+  };
+
+  libvgm = pkgs.callPackage ./pkgs/libvgm { };
+  mmlgui = pkgs.callPackage ./pkgs/mmlgui { };
+
+  ptcollab = pkgs.libsForQt5.callPackage ./pkgs/ptcollab { };
 }
 

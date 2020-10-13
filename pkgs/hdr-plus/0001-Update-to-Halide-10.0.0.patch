@@ -1,0 +1,183 @@
+From 1a6b3f0715d9460ab118eb4ca1f1e5b5466963db Mon Sep 17 00:00:00 2001
+From: OPNA2608 <christoph.neidahl@gmail.com>
+Date: Sun, 11 Oct 2020 13:11:07 +0200
+Subject: [PATCH] Update to Halide 10.0.0
+
+---
+ .github/workflows/main.yml | 16 +++++++---------
+ CMakeLists.txt             | 33 ++++++++++++++++++++++-----------
+ bin/HDRPlus.cpp            |  2 +-
+ bin/stack_frames.cpp       |  3 +--
+ src/halide_load_raw.h      |  1 -
+ 5 files changed, 31 insertions(+), 24 deletions(-)
+
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 7e16b27..0db6c41 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -15,8 +15,8 @@ jobs:
+       CXX: ${{matrix.cxx}}
+       LD: ${{matrix.ld}}
+       THIRDPARTY_DIR: ${{github.workspace}}/3rdparty
+-      HALIDE_BUILD_DIR: ${{github.workspace}}/3rdparty/Halide-master/build
+-      HALIDE_INSTALL_DIR: ${{github.workspace}}/3rdparty/Halide-master/install
++      HALIDE_BUILD_DIR: ${{github.workspace}}/3rdparty/Halide-10.0.0/build
++      HALIDE_INSTALL_DIR: ${{github.workspace}}/3rdparty/Halide-10.0.0/install
+     strategy:
+       matrix:
+         target_arch: [x86, arm]
+@@ -35,15 +35,15 @@ jobs:
+         shell: bash
+         run: |
+           sudo apt-get update
+-          sudo apt install clang-9 llvm-9
++          sudo apt install llvm-9 clang-9 libclang-9-dev
+           sudo apt remove llvm-8 llvm-6.0
+       - uses: actions/checkout@v1
+ 
+       - name: Download Halide
+         run: |
+           mkdir -p ${THIRDPARTY_DIR} && cd ${THIRDPARTY_DIR}
+-          wget https://github.com/halide/Halide/archive/master.zip
+-          unzip -o master.zip
++          wget https://github.com/halide/Halide/archive/v10.0.0.zip
++          unzip -o v10.0.0.zip
+       - name: Build Halide-${{matrix.target_os}}-${{matrix.target_arch}}-${{matrix.target_bits}}
+         working-directory: ${{ github.workspace }}/3rdparty
+         run: |
+@@ -57,7 +57,7 @@ jobs:
+         uses: actions/upload-artifact@v1
+         with:
+           name: halide-install
+-          path: ${{ github.workspace }}/3rdparty/Halide-master/install/
++          path: ${{ github.workspace }}/3rdparty/Halide-10.0.0/install/
+ 
+   build_all:
+     needs: build_halide
+@@ -70,8 +70,6 @@ jobs:
+       CXX: ${{matrix.cxx}}
+       LD: ${{matrix.ld}}
+       THIRDPARTY_DIR: ${{github.workspace}}/3rdparty
+-      HALIDE_BUILD_DIR: ${{github.workspace}}/3rdparty/Halide-master/build
+-      HALIDE_INSTALL_DIR: ${{github.workspace}}/3rdparty/Halide-master/install
+     strategy:
+       matrix:
+         target_arch: [x86, arm]
+@@ -116,4 +114,4 @@ jobs:
+ #        shell: bash
+ #        # Execute tests defined by the CMake configuration.  
+ #        # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+-#        run: ctest -C $BUILD_TYPE
+\ No newline at end of file
++#        run: ctest -C $BUILD_TYPE
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e4be369..c78bf48 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -8,13 +8,24 @@ include("macro.cmake")
+ set(CMAKE_CXX_STANDARD 11)
+ 
+ # Define dependencies
+-link_halide()
++# If Halide notm system-wide installation
++if(DEFINED HALIDE_DISTRIB_DIR)
++  list(APPEND CMAKE_PREFIX_PATH ${HALIDE_DISTRIB_DIR})
++endif(DEFINED HALIDE_DISTRIB_DIR)
++
++find_package(Halide REQUIRED)
++
++if(DEFINED HALIDE_DISTRIB_DIR)
++  # find_library(Halide REQUIRED)
++  link_directories(BEFORE "${HALIDE_DISTRIB_DIR}/lib")
++endif(DEFINED HALIDE_DISTRIB_DIR)
++
+ link_libtiff()
+ 
+ find_package(ZLIB REQUIRED)
+ find_package(PNG REQUIRED)
+ find_package(JPEG REQUIRED)
+-find_library(LIBRAW_LIBRARY NAMES raw raw_r)
++find_library(LIBRAW_LIBRARY NAMES raw raw_r REQUIRED)
+ 
+ set(src_files
+     src/InputSource.cpp
+@@ -27,15 +38,14 @@ set(header_files
+     src/dngwriter.h
+     src/LibRaw2DngConverter.h)
+ 
+-include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${HALIDE_DISTRIB_DIR}/include ${HALIDE_DISTRIB_DIR}/tools ${RAW2DNG_INCLUDE_DIRS})
++include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${RAW2DNG_INCLUDE_DIRS})
+ include_directories(${CMAKE_BINARY_DIR}/genfiles)
+ 
+-set(HALIDE_TARGET "")
+-set(HALIDE_TARGET_FEATURES "")
+-halide_library(hdrplus_pipeline
+-    SRCS src/hdrplus_pipeline_generator.cpp src/align.cpp src/merge.cpp src/finish.cpp src/util.cpp
++add_executable(hdrplus_pipeline_generator src/hdrplus_pipeline_generator.cpp src/align.cpp src/merge.cpp src/finish.cpp src/util.cpp)
++target_link_libraries(hdrplus_pipeline_generator PRIVATE Halide::Generator)
++add_halide_library(hdrplus_pipeline
+     # GENERATOR_DEPS  # We don't have any yet
+-    GENERATOR_NAME hdrplus_pipeline
++    FROM hdrplus_pipeline_generator
+     # GENERATOR_ARGS  # We don't have any yet
+     FUNCTION_NAME hdrplus_pipeline
+     # HALIDE_TARGET ${HALIDE_TARGET}  # TODO: add option with custom HALIDE_TARGET
+@@ -43,9 +53,10 @@ halide_library(hdrplus_pipeline
+     # EXTRA_OUTPUTS "stmt;html;schedule") # uncomment for extra output
+ )
+ 
+-halide_library(align_and_merge
+-    SRCS src/align_and_merge_generator.cpp src/align.cpp src/merge.cpp src/util.cpp
+-    GENERATOR_NAME align_and_merge
++add_executable(align_and_merge_generator src/align_and_merge_generator.cpp src/align.cpp src/merge.cpp src/util.cpp)
++target_link_libraries(align_and_merge_generator PRIVATE Halide::Generator)
++add_halide_library(align_and_merge
++    FROM align_and_merge_generator
+     FUNCTION_NAME align_and_merge
+     # HALIDE_TARGET ${HALIDE_TARGET}  # TODO: add option with custom HALIDE_TARGET
+     # HALIDE_TARGET_FEATURES ${HALIDE_TARGET_FEATURES}  # TODO: add option with custom HALIDE_TARGET
+diff --git a/bin/HDRPlus.cpp b/bin/HDRPlus.cpp
+index f2b8683..1730e5c 100644
+--- a/bin/HDRPlus.cpp
++++ b/bin/HDRPlus.cpp
+@@ -8,7 +8,7 @@
+ #include <include/stb_image_write.h>
+ 
+ #include <src/Burst.h>
+-#include <hdrplus_pipeline/hdrplus_pipeline.h>
++#include <hdrplus_pipeline.h>
+ 
+ /*
+  * HDRPlus Class -- Houses file I/O, defines pipeline attributes and calls
+diff --git a/bin/stack_frames.cpp b/bin/stack_frames.cpp
+index 666c56f..c3e08f9 100644
+--- a/bin/stack_frames.cpp
++++ b/bin/stack_frames.cpp
+@@ -3,11 +3,10 @@
+ #include <fstream>
+ 
+ #include <Halide.h>
+-#include <halide_image_io.h>
+ 
+ #include <src/Burst.h>
+ 
+-#include <align_and_merge/align_and_merge.h>
++#include <align_and_merge.h>
+ 
+ Halide::Runtime::Buffer<uint16_t> align_and_merge(Halide::Runtime::Buffer<uint16_t> burst) {
+     if (burst.channels() < 2) {
+diff --git a/src/halide_load_raw.h b/src/halide_load_raw.h
+index 375f31e..7f995ad 100644
+--- a/src/halide_load_raw.h
++++ b/src/halide_load_raw.h
+@@ -5,7 +5,6 @@
+ #define HALIDE_LOAD_RAW_H
+ 
+ #include "Halide.h"
+-#include "halide_image_io.h"
+ #include <libraw/libraw.h>
+ 
+ namespace Halide {
+-- 
+2.17.1
+
