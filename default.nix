@@ -16,7 +16,7 @@
 
   # Bumped Halide, dependency. PR #100202
   halide-10 = pkgs.callPackage ./pkgs/halide-10 {
-    llvmPackages = llvmPackages_9;
+    llvmPackages = pkgs.llvmPackages_9;
   };
 
   hdr-plus = pkgs.callPackage ./pkgs/hdr-plus {
