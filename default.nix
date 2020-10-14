@@ -24,7 +24,9 @@ rec {
   };
 
   libvgm = pkgs.callPackage ./pkgs/libvgm { };
-  mmlgui = pkgs.callPackage ./pkgs/mmlgui { };
+  mmlgui = pkgs.callPackage ./pkgs/mmlgui {
+    inherit libvgm;
+  };
 
   ptcollab = pkgs.libsForQt5.callPackage ./pkgs/ptcollab { };
 }
