@@ -28,7 +28,7 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  meta = with lib; {
+  meta = with stdenv.lib; {
     description = "HDR+ Implementation";
     longDescription = ''
       A burst processing pipeline for photography based on Google's HDR+.
